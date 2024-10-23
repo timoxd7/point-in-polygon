@@ -16,6 +16,8 @@ struct Point {
     inline bool operator==(const Point<T>& other) const { return x == other.x && y == other.y; }
 };
 
+enum direction_t { DIR_UP, DIR_DOWN, DIR_NONE };
+
 template <typename T>
 struct Line {
     const Point<T>& p1;
@@ -24,8 +26,6 @@ struct Line {
     constexpr Line(const Point<T>& p1, const Point<T>& p2) : p1(p1), p2(p2) {}
 
     inline bool operator==(const Line<T>& other) const { return p1 == other.p1 && p2 == other.p2; }
-
-    enum direction_t { DIR_UP, DIR_DOWN, DIR_NONE };
 
     inline direction_t getDirection() const {
         if (p1.y < p2.y) {
@@ -176,13 +176,13 @@ class Polygon {
         bool isInside = false;
 
         // Get direction of the line previous to the first line
-        auto prevLineDirection = Line<T>::DIR_NONE;
+        auto prevLineDirection = DIR_NONE;
         for (size_t i = _count - 1, j = _count - 2; i > 0; i = j--) {
             const Line<T> line(points[j], points[i]);
             prevLineDirection = line.getDirection();
 
             // If none, check next previous point
-            if (prevLineDirection == Line<T>::DIR_NONE) continue;
+            if (prevLineDirection == DIR_NONE) continue;
 
             // Otherwise we have a direction -> break
             break;
@@ -225,7 +225,7 @@ class Polygon {
      * @return false
      */
     static inline line_intersect_t _pointLineIntersects(const Point<T>& point, const Line<T>& line,
-                                                        Line<T>::direction_t& lineDirectionInOut) {
+                                                        direction_t lineDirectionInOut) {
         /*
             Will take the point and draw a line to the right (bigger x-values).
             Then checks if this line intersects with the given line
@@ -235,7 +235,7 @@ class Polygon {
         const auto lineDirectionCurrent = line.getDirection();
 
         // Special-Case: Horizontal line (Included line with two equal points)
-        if (lineDirectionCurrent == Line<T>::DIR_NONE) {
+        if (lineDirectionCurrent == DIR_NONE) {
             // -> Horizontal line -> Check if point is on the line
             if (point.y == line.p1.y && point.x >= std::min(line.p1.x, line.p2.x) &&
                 point.x < std::max(line.p1.x, line.p2.x)) {
