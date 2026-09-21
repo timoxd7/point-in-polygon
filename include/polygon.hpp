@@ -223,9 +223,13 @@ class Polygon {
      * calculation is exact as long as the bounding box' width multiplied by its height fits in
      * here.
      */
-#ifdef __SIZEOF_INT128__
+#if defined(__SIZEOF_INT128__) && !defined(POLYGON_NO_INT128)
     using intermediate_t = std::conditional_t<std::is_integral_v<T>, __int128, long double>;
 #else
+    // 32 bit targets have no __int128. long long still covers every polygon whose bounding box
+    // area fits in 63 bits, which includes one spanning the whole globe at the 1e7 degree
+    // precision this library is usually fed with: 180e7 * 360e7 = 6.5e18 against 9.2e18.
+    // Define POLYGON_NO_INT128 to compile this variant on a 64 bit host, for testing.
     using intermediate_t = std::conditional_t<std::is_integral_v<T>, long long, long double>;
 #endif
 
