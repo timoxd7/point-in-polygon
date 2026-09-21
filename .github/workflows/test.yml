@@ -1,0 +1,55 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.compiler }} ${{ matrix.optimization }} ${{ matrix.intermediate && '64 bit' || '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+        optimization: ['-O0', '-O2']
+        # A 32 bit target has no __int128 and falls back to long long. The runner is 64 bit, so
+        # that variant is built explicitly instead of only the widest one.
+        intermediate: ['', '-DPOLYGON_NO_INT128']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: >
+          ${{ matrix.compiler }} -std=c++20 ${{ matrix.optimization }}
+          ${{ matrix.intermediate }}
+          -Wall -Wextra -Werror
+          -I include test/test_polygon.cpp -o test_polygon
+
+      - name: Run
+        run: ./test_polygon
+
+  sanitizers:
+    name: ${{ matrix.compiler }} sanitizers ${{ matrix.intermediate && '64 bit' || '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+        intermediate: ['', '-DPOLYGON_NO_INT128']
+    steps:
+      - uses: actions/checkout@v4
+
+      # The overflow this suite guards against is undefined behaviour, so the sanitizer catches
+      # it even where the wrapped result happens to give the right answer.
+      - name: Build
+        run: >
+          ${{ matrix.compiler }} -std=c++20 -O1 -g
+          ${{ matrix.intermediate }}
+          -Wall -Wextra -Werror
+          -fsanitize=address,undefined -fno-sanitize-recover=all
+          -I include test/test_polygon.cpp -o test_polygon
+
+      - name: Run
+        run: ./test_polygon

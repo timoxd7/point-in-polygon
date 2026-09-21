@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <type_traits>
 
 namespace geo {
 
@@ -133,8 +134,9 @@ class Polygon {
             return false;
         }
 
-        // Check if at least 3 unique points
-        size_t uniquePoints = 0;
+        // Check if at least 3 unique points. The loop below starts at the second point and only
+        // ever compares backwards, so the first point is never tested and has to be counted here.
+        size_t uniquePoints = 1;
 
         for (size_t i = 1; i < _count; ++i) {
             bool isUnique = true;
@@ -211,6 +213,25 @@ class Polygon {
 
    private:
     size_t _count;
+
+    /**
+     * @brief Type used for the intermediate calculations in _pointLineIntersects().
+     *
+     * Both the difference of two coordinates and the product of two such differences have to be
+     * representable, which needs more bits than T itself offers. The bounding box check in
+     * checkPointInPolygon() limits every difference to the extent of the polygon, so the
+     * calculation is exact as long as the bounding box' width multiplied by its height fits in
+     * here.
+     */
+#if defined(__SIZEOF_INT128__) && !defined(POLYGON_NO_INT128)
+    using intermediate_t = std::conditional_t<std::is_integral_v<T>, __int128, long double>;
+#else
+    // 32 bit targets have no __int128. long long still covers every polygon whose bounding box
+    // area fits in 63 bits, which includes one spanning the whole globe at the 1e7 degree
+    // precision this library is usually fed with: 180e7 * 360e7 = 6.5e18 against 9.2e18.
+    // Define POLYGON_NO_INT128 to compile this variant on a 64 bit host, for testing.
+    using intermediate_t = std::conditional_t<std::is_integral_v<T>, long long, long double>;
+#endif
 
     enum line_intersect_t { INTERSECT, NO_INTERSECT, ON_LINE };
 
@@ -290,17 +311,20 @@ class Polygon {
         }
 
         // Normalize points
-        const Point<T> normalizedUpperLinePoint =
-            Point<T>(upperPoint.x - lowerPoint.x, upperPoint.y - lowerPoint.y);
-        const Point<T> normalizedPoint(point.x - lowerPoint.x, point.y - lowerPoint.y);
+        const intermediate_t lineX = (intermediate_t)upperPoint.x - (intermediate_t)lowerPoint.x;
+        const intermediate_t lineY = (intermediate_t)upperPoint.y - (intermediate_t)lowerPoint.y;
+        const intermediate_t pointX = (intermediate_t)point.x - (intermediate_t)lowerPoint.x;
+        const intermediate_t pointY = (intermediate_t)point.y - (intermediate_t)lowerPoint.y;
 
-        // Now we need to check if we are left or right of the line
-        const T pointXOnLine =
-            (normalizedPoint.y * normalizedUpperLinePoint.x) / normalizedUpperLinePoint.y;
-
-        // Get the point on the line at hight of the given point/line to the right and check
+        // Get the point on the line at height of the given point/line to the right and check
         // if the point is left of this point. If so, the horizontal line intersects the given line.
-        const bool pointLeftOfLine = point.x <= lowerPoint.x + pointXOnLine;
+        //
+        // This is the cross multiplied form of 'pointX <= (pointY * lineX) / lineY'. Multiplying
+        // instead of dividing keeps the comparison exact, and both the differences above and the
+        // products here overflow T for anything but very short lines, hence intermediate_t. lineY
+        // is always > 0 here, so the inequality does not flip: upperPoint is the point with the
+        // bigger y and the equal-y case was already handled as a horizontal line above.
+        const bool pointLeftOfLine = pointX * lineY <= pointY * lineX;
 
         if (pointLeftOfLine) {
             // Check if point is at same X-Position as first point of line. If so,
