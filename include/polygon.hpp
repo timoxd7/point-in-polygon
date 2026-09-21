@@ -134,8 +134,9 @@ class Polygon {
             return false;
         }
 
-        // Check if at least 3 unique points
-        size_t uniquePoints = 0;
+        // Check if at least 3 unique points. The loop below starts at the second point and only
+        // ever compares backwards, so the first point is never tested and has to be counted here.
+        size_t uniquePoints = 1;
 
         for (size_t i = 1; i < _count; ++i) {
             bool isUnique = true;
